@@ -1,0 +1,188 @@
+name: neus-split-nerfactor-${dataset.scene}
+tag: ""
+seed: 42
+
+dataset:
+  name: nerfactor
+  scene: ???
+  root_dir: ./load/nerfactor/${dataset.scene}
+  img_wh:
+    - 512
+    - 512
+  # img_downscale: 1 # specify training image size by either img_wh or img_downscale
+  near_plane: 2.0
+  far_plane: 6.0
+  train_split: "train"
+  val_split: "val"
+  test_split: "test"
+  load_envmap: true
+
+model:
+  name: neus-split
+  radius: 1.5
+  num_samples_per_ray: 1024
+  train_num_rays: 256
+  max_train_num_rays: 8192
+  grid_prune: true
+  grid_prune_occ_thre: 0.001
+  dynamic_ray_sampling: true
+  batch_image_sampling: true
+  randomized: true
+  ray_chunk: 4096
+  cos_anneal_end: 20000
+  learned_background: false
+  background_color: random
+  indirect_light: false
+  variance:
+    init_val: 0.3
+    modulate: false
+  geometry:
+    name: volume-sdf
+    radius: ${model.radius}
+    feature_dim: 13
+    grad_type: analytic
+    isosurface:
+      method: mc
+      resolution: 512
+      chunk: 2097152
+      threshold: 0.
+    xyz_encoding_config:
+      otype: HashGrid
+      n_levels: 16
+      n_features_per_level: 2
+      log2_hashmap_size: 19
+      base_resolution: 32
+      per_level_scale: 1.3195079107728942
+      include_xyz: true
+    mlp_network_config:
+      otype: VanillaMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 64
+      n_hidden_layers: 1
+      sphere_init: true
+      sphere_init_radius: 0.5
+      weight_norm: true
+  texture:
+    name: volume-splitsum
+    input_feature_dim: ${model.geometry.feature_dim}
+    env_map_path: ${dataset.root_dir}/env_map.hdr
+    brdf_map_path: ./BRDFLut.hdr
+    mesh_path: ${dataset.root_dir}/mesh.ply
+    use_gt_mesh: false
+    indirect_light: ${model.indirect_light}
+    use_ao: true
+    use_transparency: false
+    average_ao: false
+    ao_n_samples: 64
+    ind_n_samples: 64
+    diff_percentage: 0.5
+    local_gamma: 1.0
+    dir_encoding_config:
+      otype: VanillaFrequency
+      n_frequencies: 10
+    rough_encoding_config:
+      otype: VanillaFrequency
+      n_frequencies: 5
+    material_network_config:
+      otype: NeRFMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 256
+      n_hidden_layers: 2
+    ao_network_config:
+      otype: NeRFMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 256
+      n_hidden_layers: 2
+    illum_network_config:
+      otype: NeRFMLP
+      activation: ReLU
+      output_activation: softplus
+      n_neurons: 256
+      n_hidden_layers: 5
+    local_network_config:
+      otype: NeRFMLP
+      activation: ReLU
+      output_activation: none
+      n_neurons: 256
+      n_hidden_layers: 2
+    indirect_network_config:
+      otype: NeRFMLP
+      activation: ReLU
+      output_activation: softplus
+      n_neurons: 256
+      n_hidden_layers: 2
+
+system:
+  name: neus-split-system
+  loss:
+    lambda_rgb_mse: 10.
+    lambda_rgb_l1: 0.
+    lambda_mask: 0.0
+    lambda_eikonal: 0.1
+    lambda_curvature: 0.
+    lambda_sparsity: 0.0
+    lambda_distortion: 0.
+    lambda_opaque: 0.
+    lambda_illum: 1.0
+    lambda_local: 0.05
+    lambda_ao: 0.01
+    lambda_indirect: 0.1
+    lambda_envmap: 1.0
+    lambda_met: 0.0
+    sparsity_scale: 1.
+  optimizer:
+    name: AdamW
+    args:
+      lr: 0.01
+      betas: [0.9, 0.99]
+      eps: 1.e-15
+    params:
+      geometry:
+        lr: 0.01
+      texture:
+        lr: 0.01
+      variance:
+        lr: 0.001
+  warmup_steps: 500
+  scheduler:
+    name: SequentialLR
+    interval: step
+    milestones:
+      - ${system.warmup_steps}
+    schedulers:
+      - name: LinearLR # linear warm-up in the first system.warmup_steps steps
+        args:
+          start_factor: 0.01
+          end_factor: 1.0
+          total_iters: ${system.warmup_steps}
+      - name: ExponentialLR
+        args:
+          gamma: ${calc_exp_lr_decay_rate:0.1,${sub:${trainer.max_steps},${system.warmup_steps}}}
+
+checkpoint:
+  save_top_k: -1
+  every_n_train_steps: ${trainer.max_steps}
+
+export:
+  chunk_size: 2097152
+  export_vertex_color: True
+
+export_envmap:
+  res_h: 512
+  res_w: 1024
+  specular_samples: [0.0, 0.2, 0.5, 1.0]
+  
+
+trainer:
+  max_steps: 20000
+  log_every_n_steps: 100
+  num_sanity_val_steps: 0
+  val_check_interval: 10000
+  limit_train_batches: 1.0
+  limit_val_batches: 2
+  limit_test_batches: 10
+  enable_progress_bar: true
+  precision: 16
