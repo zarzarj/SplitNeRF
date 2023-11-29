@@ -9,11 +9,12 @@ Run the launch script with `--train`, specifying the config file, the GPU(s) to 
 ```bash
 # train NeRF
 python launch.py --config configs/neus-split-blender_paper.yaml --gpu 0 --train dataset.scene=lego tag=example
-
+```
 
 
 ## Citation
-This code is built on top ofInstant NSR:
+This code is built on top of Instant NSR. We would like to thank the authors for their codebase.:
+
 ```
 @misc{instant-nsr-pl,
     Author = {Yuan-Chen Guo},
@@ -22,4 +23,3 @@ This code is built on top ofInstant NSR:
     Title = {Instant Neural Surface Reconstruction}
 }
 ```
-We would like to thank the authors for their codebase.
