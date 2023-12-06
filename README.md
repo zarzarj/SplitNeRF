@@ -6,11 +6,13 @@ Install PyTorch>=1.10 here based the package management tool you used and your c
 pip install -r requirements.txt
 
 Install python-optix:
-Download [OptiX 7.6.0 SDK](https://developer.nvidia.com/optix/downloads/7.6.0/linux64-x86_64)
+Download and extract [OptiX 7.6.0 SDK](https://developer.nvidia.com/optix/downloads/7.6.0/linux64-x86_64)
+```
 export OPTIX_PATH=/path/to/optix
 export CUDA_PATH=/path/to/cuda_toolkit
 export OPTIX_EMBED_HEADERS=1 # embed the optix headers into the package
 python -m pip install python-optix
+```
 
 ## Run
 ### Training on NeRF-Synthetic
@@ -18,7 +20,7 @@ Download the NeRF-Synthetic data [here](https://drive.google.com/drive/folders/1
 
 Run the launch script with `--train`, specifying the config file, the GPU(s) to be used (GPU 0 will be used by default), and the scene name:
 ```bash
-# train NeRF
+# train SplitNeRF
 python launch.py --config configs/splitnerf-blender.yaml --gpu 0 --train dataset.scene=lego tag=example
 ```
 
