@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import trimesh
 import imageio
-# from trimesh.ray.ray_pyembree import RayMeshIntersector
 from pyoptix.raycast_gpu import OptixRayMeshIntersector
 
 import torch.nn.functional as F
@@ -11,7 +10,6 @@ from models.utils import get_activation
 from models.network_utils import get_encoding, get_mlp
 from systems.utils import update_module_step
 from models.utils_illum import *
-import copy
 
 
 @models.register("volume-radiance")
@@ -108,13 +106,11 @@ class VolumeSplitsum(nn.Module):
         self.mipmap_illum = config.get("mipmap_illum", False)
         if self.average_ao: self.ao_n_channels = 2
         else: self.ao_n_channels = 6
-        # self.ao_layer = None
         if self.learnt_ao:
             self.ao_layer = get_mlp(
                         n_pos_feats, self.ao_n_channels, self.config.ao_network_config
                     )  # pos features -> ao
             if self.start_ao_ones: self.ao_layer.requires_grad_(False)
-        # import pdb; pdb.set_trace()
         
         if self.mipmap_illum:
             from models.diff_env_mipmap import create_trainable_env_rnd
@@ -131,7 +127,6 @@ class VolumeSplitsum(nn.Module):
         self.ao_n_samples = config.get("ao_n_samples", 64)
         self.ind_n_samples = config.get("ind_n_samples", 64)
         self.diff_percentage = config.get("diff_percentage", 0.5)
-        # if config.indirect_light:
 
         imageio.plugins.freeimage.download()
         BRDF_map = imageio.imread(self.config.brdf_map_path, format="HDR-FI")
@@ -144,12 +139,8 @@ class VolumeSplitsum(nn.Module):
 
         if self.config.get("use_gt_mesh", False):
             mesh = trimesh.load(self.config.mesh_path)
-            # self.intersector = RayMeshIntersector(mesh)
             self.intersector = OptixRayMeshIntersector(mesh)
             if self.use_ao and self.learnt_ao:
-                # self.ao_layer = get_mlp(
-                #     n_pos_feats, self.ao_n_channels, self.config.ao_network_config
-                # )  # pos features -> ao
                 self.ao_layer.requires_grad_(True)
         else:
             self.intersector = None
@@ -185,10 +176,6 @@ class VolumeSplitsum(nn.Module):
             enc_spec = self.encode_specular(R, roughness)
             spec_global = self.illum_layer(enc_spec)
         return spec_global
-    
-    # def get_specular_global2(self, R, roughness):
-    #     enc_spec = self.encode_specular(R, roughness)
-    #     return self.illum_layer.forward(enc_spec)
 
     def get_diffuse_global(self, N):
         if self.mipmap_illum:
@@ -205,10 +192,6 @@ class VolumeSplitsum(nn.Module):
         
         return local
 
-    # def get_indirect(self, pos_features, view_dir):
-    #     enc_inputs = [pos_features, self.dir_encoding(view_dir)]
-    #     indirect = self.indirect_layer(torch.cat(enc_inputs, axis=-1))
-    #     return indirect
 
     def query_envmap(self, L):
         return self.get_specular_global(L, torch.zeros_like(L)[..., 0:1])
@@ -232,34 +215,10 @@ class VolumeSplitsum(nn.Module):
         if self.config.get("use_gt_mesh", False):
             return
         
-        # if self.use_ao and self.learnt_ao and not self.ao_layer.output_layer.weight.requires_grad:
         if self.use_ao and self.learnt_ao:
-            # self.ao_layer = get_mlp(
-            #     self.config.input_feature_dim, self.ao_n_channels, self.config.ao_network_config
-            # ).to(self.BRDF_map.device)  # pos features -> ao
-            # import pdb; pdb.set_trace()
             self.ao_layer.requires_grad_(True)
-            # ao_param_group = optimizer[0].param_groups[1].copy()
-            # ao_param_group['params'] =  list(self.ao_layer.parameters())
-            # ao_param_group['name'] =  "ao_layer"
-            # optimizer[0].param_groups.append(ao_param_group)
-            
-            
-            # optimizer[0]
         mesh = trimesh.Trimesh(vertices=mesh["v_pos"], faces=mesh["t_pos_idx"])
-        # self.intersector = RayMeshIntersector(mesh)
         self.intersector = OptixRayMeshIntersector(mesh)
-        
-        # if self.geometry is None:
-        #     self.indirect_layer = get_mlp(
-        #         self.config.input_feature_dim + self.dir_encoding.n_output_dims,
-        #         3,
-        #         self.config.indirect_network_config,
-        #     ).to(
-        #         self.BRDF_map.device
-        #     )  # pos features + directional features (v) -> Ll
-        # import pdb; pdb.set_trace()
-        
 
     def forward(self, features, view_dir, N, *args):
         out = {}
@@ -287,71 +246,25 @@ class VolumeSplitsum(nn.Module):
             else:
                 ao = torch.ones((N.shape[0],self.ao_n_channels)).to(N)
         
-        # if self.use_ao and self.intersector is not None:
-        #     if self.learnt_ao:
-        #         ao = torch.sigmoid(self.ao_layer(features))
-        #     else:
-        #         if N.shape[0] > 0:
-        #             # ao = torch.zeros_like(albedo)[...,:2]
-        #             ao = self.get_ao_mc(args[0], N, roughness)
-        #             # ao = torch.ones_like(ao)
-        #         else:
-        #             ao = torch.ones((0,2)).to(N)
-        # else:
-        #     ao = torch.ones_like(albedo)
-            
-            
-            
-        # import pdb; pdb.set_trace()
-        # if N.shape[0] > 0:
-        #     with torch.no_grad():
-        #         ao = self.get_ao_mc(args[0], N, roughness)
-        # else:
-        #     ao = torch.ones((0,2)).to(N)
-        # import pdb; pdb.set_trace()
-        # print(ao.shape, albedo.shape)
-        
         F0 = mix(0.04, albedo, metallic)
         Fr = FresnelSchlickRoughness(NdV, F0, roughness)
         Ks = Fr
         Kd = 1.0 - Ks
         Kd = Kd * ( 1 - metallic )
-        
-        if self.use_transparency:
-            transparency = torch.sigmoid(materials[..., -1:])
-            # transparency*= 1e-4
-            # Kd *= 1-transparency
-            # Kt = 1-transparency + transparency * (1 - torch.pow(NdV, 0.8))
-            Kd = Kd * ( 1 - transparency )
-            Kt = 1 - transparency * torch.pow(NdV, 0.8)
-            out.update({"Kt": Kt,
-                        "transparency": transparency})
-            Ks = Ks * Kt
-            # Ks *= Kt
-
+ 
         diffuse_irradiance_global = self.get_diffuse_global(N)
         diffuse = Kd * albedo * diffuse_irradiance_global / torch.pi
 
         specular_irradiance_global = self.get_specular_global(R, roughness)
-        # specular_irradiance_global = torch.ones_like(diffuse_irradiance_global)
         envBRDF = self.sample_BRDF_map(NdV, roughness)
         specular = specular_irradiance_global * (Fr * envBRDF[:, 0:1] + envBRDF[:, 1:2])
 
-        
-        # if self.geometry is not None:
-            # local_radiance = F.relu(local_radiance)
-            # indirect = self.get_indirect(features, view_dir)
-            # raw_color += local_radiance
-            # out["indirect"] = local_radiance
-
         raw_color = (diffuse * ao[..., :self.ao_n_channels//2] + specular * ao[..., -self.ao_n_channels//2:])
-        # import pdb; pdb.set_trace()
-        # raw_color = diffuse  + specular
+
         if self.use_local:
             local_radiance = self.get_local_radiance(features, view_dir)
             raw_color = raw_color + local_radiance
             out["local"] = local_radiance
-        # import pdb; pdb.set_trace()
         color = saturate(linear_to_srgb(raw_color))
 
         out.update(
@@ -369,11 +282,9 @@ class VolumeSplitsum(nn.Module):
                 "R": R,
             }
         )
-        # import pdb; pdb.set_trace()
         return out
 
     def regularizations(self, out):
-        # import pdb; pdb.set_trace()
         reg = {}
         if not self.mipmap_illum:
             if self.illum_loss_rand:
@@ -486,9 +397,6 @@ class VolumeSplitsum(nn.Module):
         pos_expanded = pos.unsqueeze(1).expand(-1, d.shape[1], -1).contiguous()
         delta = self.ao_sample_dist
         pos_expanded = pos_expanded + delta * d
-        # intersect = self.intersector.intersects_any(
-        #     pos_expanded.reshape(-1, 3).detach().cpu(), d.reshape(-1, 3).detach().cpu()
-        # )
         intersect = self.intersector.query_intersection(
             pos_expanded.reshape(-1, 3), d.reshape(-1, 3)
         )[...,-1]
