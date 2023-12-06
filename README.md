@@ -2,17 +2,20 @@
 We provide the code for SplitNeRF. [Project Page](https://zarzarj.github.io/splitnerf.github.io/) [arXiv](https://arxiv.org/abs/2311.16671)
 
 ## Setup
-Install PyTorch>=1.10 here based the package management tool you used and your cuda version (conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia)
-pip install -r requirements.txt
-
-Install python-optix:
-Download and extract [OptiX 7.6.0 SDK](https://developer.nvidia.com/optix/downloads/7.6.0/linux64-x86_64)
+Download and extract [OptiX 7.6.0 SDK](https://developer.nvidia.com/optix/downloads/7.6.0/linux64-x86_64).
+Setup environment variables (required for installing python-optix)
 ```
 export OPTIX_PATH=/path/to/optix
 export CUDA_PATH=/path/to/cuda_toolkit
 export OPTIX_EMBED_HEADERS=1 # embed the optix headers into the package
-python -m pip install python-optix
 ```
+
+Install pytorch and other requirements:
+```
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia  
+pip install -r requirements.txt
+```
+
 
 ## Run
 ### Training on NeRF-Synthetic
